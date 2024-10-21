@@ -1,47 +1,50 @@
 ﻿const string url = "https://raw.githubusercontent.com/lucide-icons/lucide/refs/heads/main/icons/{0}.svg";
 var httpClient = new HttpClient();
 
-var svgWriter = File.CreateText("Svg.cs");
-await svgWriter.WriteLineAsync("public class SVG {");
-Dictionary<string, string> Svgs = [];
-
-while (true)
+await using(var svgWriter = File.CreateText("Svg.cs"))
 {
-    Console.WriteLine("Enter a lucide icon name (Enter to finish)");
-    var iconName = Console.ReadLine();
-    if (string.IsNullOrEmpty(iconName)) break;
-    try
+    await svgWriter.WriteLineAsync("public class SVG {");
+    Dictionary<string, string> Svgs = [];
+
+    while (true)
     {
-        var toFetch = string.Format(url, iconName.ToLowerInvariant());
-        var svgStr = await httpClient.GetStringAsync(toFetch);
-        iconName = string.Join("", iconName.Split("-").Select(x => ToUpper(x, 0).ToString()));
-        Console.WriteLine($"Found file with name: {iconName}");
-        Console.WriteLine("Write to override, empty to use");
-        var newName = Console.ReadLine();
-        if (!string.IsNullOrEmpty(newName))
+        Console.WriteLine("Enter a lucide icon name (Enter to finish)");
+        var iconName = Console.ReadLine();
+        if (string.IsNullOrEmpty(iconName)) break;
+        try
         {
-            iconName = newName;
+            var toFetch = string.Format(url, iconName.ToLowerInvariant());
+            var svgStr = await httpClient.GetStringAsync(toFetch);
+            iconName = string.Join("", iconName.Split("-").Select(x => ToUpper(x, 0).ToString()));
+            Console.WriteLine($"Found file with name: {iconName}");
+            Console.WriteLine("Write to override, empty to use");
+            var newName = Console.ReadLine();
+            if (!string.IsNullOrEmpty(newName))
+            {
+                iconName = newName;
+            }
+            Svgs.TryAdd(iconName, svgStr);
         }
-        Svgs.TryAdd(iconName, svgStr);
+        catch
+        {
+            Console.WriteLine("Failed");
+        }
     }
-    catch
+
+    foreach (var (name, content) in Svgs)
     {
-        Console.WriteLine("Failed");
+        await svgWriter.WriteLineAsync($"""" 
+        public const string {name} = """
+            {content.ReplaceLineEndings("").Replace("  ", " ").Replace("><", ">\n<").Replace("> <", ">\n<")}
+        """;
+        """");
     }
+    await svgWriter.WriteLineAsync("}");
+    await svgWriter.FlushAsync();
+    Console.WriteLine($"Added {Svgs.Count} svgs to Svg.cs");
 }
-
-foreach (var (name, content) in Svgs)
-{
-    await svgWriter.WriteLineAsync($"""" 
-    public const string {name} = """
-        {content}
-    """;
-    """");
-}
-await svgWriter.WriteLineAsync("}");
-await svgWriter.FlushAsync();
-
-Console.WriteLine($"Added {Svgs.Count} svgs to Svg.cs");
+var svgText = File.ReadAllText("Svg.cs");
+Console.WriteLine(svgText);
 return;
 
 static ReadOnlySpan<char> ToUpper(string stringValue, int index)
